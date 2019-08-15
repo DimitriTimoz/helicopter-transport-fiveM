@@ -330,6 +330,7 @@ RCCar.Tow = function()
 						elseif IsVehicleModel(targetVehicle, GetHashKey('swift2')) or IsVehicleModel(targetVehicle, GetHashKey('swift')) then
 							y = -1.3
 							z = 0.45
+							backY = -6.0
 						elseif IsVehicleModel(targetVehicle, GetHashKey('volatus'))then
 							y = -1.8
 							z = 1.25
