@@ -1,14 +1,14 @@
-local RCCar = {['towed'] = false}
+local RCCar = {['towed'] = false, ['connected'] = true}
 
-RegisterCommand("rc", function()
-	RCCar.Start() -- spawn le charriot
+RegisterCommand("start_transport", function()
+	RCCar.Start() -- spawn the platform
 end)
 
 RegisterCommand("stop", function()
-	RCCar.Attach("pick") -- Supprime le charriot 
+	RCCar.Attach("pick") -- delete the platform 
 end)
 
-RegisterNetEvent('helicopter:spawn-cart')
+RegisterNetEvent('helicopter:spawn-cart') 
 AddEventHandler('helicopter:spawn-cart', function ()
 	RCCar.Start()
 end)
@@ -30,27 +30,36 @@ RCCar.Start = function()
 
 	while DoesEntityExist(RCCar.Entity) and DoesEntityExist(RCCar.Driver) do
 		Citizen.Wait(5)
-
 		local distanceCheck = GetDistanceBetweenCoords(GetEntityCoords(PlayerPedId()),  GetEntityCoords(RCCar.Entity), true)
-
-		RCCar.DrawInstructions(distanceCheck)
 		RCCar.HandleKeys(distanceCheck)
+		if RCCar.connected then
+			RCCar.DrawInstructions(distanceCheck)
+			RCCar.HandleKeys(distanceCheck)
 
-		if distanceCheck <= Config.LoseConnectionDistance then
-			if not NetworkHasControlOfEntity(RCCar.Driver) then
-				NetworkRequestControlOfEntity(RCCar.Driver)
-			elseif not NetworkHasControlOfEntity(RCCar.Entity) then
-				NetworkRequestControlOfEntity(RCCar.Entity)
+			if distanceCheck <= Config.LoseConnectionDistance then
+				if not NetworkHasControlOfEntity(RCCar.Driver) then
+					NetworkRequestControlOfEntity(RCCar.Driver)
+				elseif not NetworkHasControlOfEntity(RCCar.Entity) then
+					NetworkRequestControlOfEntity(RCCar.Entity)
+				end
+			else
+				TaskVehicleTempAction(RCCar.Driver, RCCar.Entity, 6, 2500)
 			end
-		else
-			TaskVehicleTempAction(RCCar.Driver, RCCar.Entity, 6, 2500)
-		end
+		end		
 	end
 end
 
 RCCar.HandleKeys = function(distanceCheck)
-	if distanceCheck < Config.LoseConnectionDistance then
-		if IsControlPressed(0, 172) then
+	if distanceCheck < Config.LoseConnectionDistance and not RCCar.connected then
+		if IsControlPressed(0, 45) then
+			RCCar.Tablet(true)
+			RCCar.connected = true
+			ShowNotification("~g~ Vous êtes connecté à la plat-forme")
+			Citizen.Wait(500)
+		end
+	end
+	if distanceCheck < Config.LoseConnectionDistance and RCCar.connected then
+		if IsControlPressed(0, 245) then
 			if GetEntitySpeed(RCCar.Entity) > 1.5 then
         		SetVehicleForwardSpeed(RCCar.Entity, 1.5)
        	    end 
@@ -60,6 +69,14 @@ RCCar.HandleKeys = function(distanceCheck)
 			if GetEntitySpeed(RCCar.Entity) > 1.5 then
         		SetVehicleForwardSpeed(RCCar.Entity, -1.5)
        	    end 
+		end
+
+		if IsControlPressed(0, 245) then
+			
+			RCCar.connected = false
+			ShowNotification("~r~ Vous êtes déconnecté de la plat-forme")
+			Citizen.Wait(500)
+			RCCar.Tablet(false)
 		end
 
 		if IsControlPressed(0, 172) and not IsControlPressed(0, 173) then
@@ -111,26 +128,30 @@ end
 RCCar.DrawInstructions = function(distanceCheck)
 	local steeringButtons = {
 		{
-			["label"] = "Droite",
+			["label"] = "Right",
 			["button"] = "~INPUT_CELLPHONE_RIGHT~"
 		},
 		{
-			["label"] = "Avancer",
+			["label"] = "Forward",
 			["button"] = "~INPUT_CELLPHONE_UP~"
 		},
 		{
-			["label"] = "Reculer",
+			["label"] = "Back",
 			["button"] = "~INPUT_CELLPHONE_DOWN~"
 		},
 		{
-			["label"] = "Gauche",
+			["label"] = "Left",
 			["button"] = "~INPUT_CELLPHONE_LEFT~"
+		},
+		{
+			["label"] = "Disconnect",
+			["button"] = "~INPUT_MP_TEXT_CHAT_ALL~"
 		},
 	}
 
 	local buttonsToDraw = {
 		{
-			["label"] = "Attacher/Detacher",
+			["label"] = "Attach/Detach",
 			["button"] = "~INPUT_CONTEXT~"
 		}
 	}
@@ -172,15 +193,16 @@ RCCar.DrawInstructions = function(distanceCheck)
 end
 
 RCCar.Spawn = function()
-	RCCar.LoadModels({ GetHashKey("airtug"), 68070371 })
+	RCCar.LoadModels({ GetHashKey("airtug"), 68070371, "prop_air_trailer_4b" })
 
 	local spawnCoords, spawnHeading = GetEntityCoords(PlayerPedId()) + GetEntityForwardVector(PlayerPedId()) * 2.0, GetEntityHeading(PlayerPedId())
 	RCCar.Entity = CreateVehicle(GetHashKey("airtug"), spawnCoords , spawnHeading, true)
-	RCCar.Cart = CreateObject(GetHashKey("prop_air_trailer_4b"), 0, 0, 0, true, true, true)
+	RCCar.Cart = CreateObject(GetHashKey("prop_air_trailer_4b"), 0.0, 0.0, 0.0, true, true, true)
 	while not DoesEntityExist(RCCar.Entity) do
 		Citizen.Wait(5)
 	end
-
+	
+	SetEntityNoCollisionEntity(PlayerPedId(), RCCar.Entity)
 	SetEntityInvincible(RCCar.Entity, true)
 	SetEntityVisible(RCCar.Entity, false)
 	AttachEntityToEntity(RCCar.Cart, RCCar.Entity, GetPedBoneIndex(PlayerPedId(), 28422), 0.0, 0.0, -0.44, 0.0, 0.0, 90.0, true, true, true, true, 1, true)	
@@ -218,7 +240,7 @@ RCCar.Attach = function(param)
 			RCCar.UnloadModels()
 		end
 	else
-		ShowNotification("~r~ Vous devez d'abord détacher l'hélicoptère avant de ranger le charriot")
+		ShowNotification("~r~ You must detach the helicopter to the cart")
 	end			
 end
 
@@ -297,9 +319,10 @@ function ShowNotification(text)
 end
 
 local backY = -5.0
+
 RCCar.Tow = function()	
 	local coords = GetEntityCoords(GetPlayerPed(-1))
-	local targetVehicle = GetPlayersLastVehicle(GetPlayerPed(-1))  -- Vehicule à déplacer
+	local targetVehicle = GetPlayersLastVehicle(GetPlayerPed(-1))  -- Vehicle to move
 	local x,y,z  = 0.0, 0.0, 0.0
 	if not RCCar.towed then	
 		if targetVehicle ~= 0 then
@@ -316,14 +339,15 @@ RCCar.Tow = function()
 						z = 1.7
 						backY = -5.0	
 						--CUSTOM--
-						-- Pour ajouter une position custom dupliquez une condition puis dans la condition 
-						--'IsVehicleModel(.., GetHashKey(-ici-))' inserez le nom de votre helicoptère
-						-- Ensuite régles x,y et z. 
-						--'z' est la hauteur
-						--'y' est de l'avant à l'arrière
-						--'x' est de gauche à droite
-						--'backY' est la position y du vehicule lorsqu il sera d'étaché
-						-- Les coordonnés doivent toujours avoir un chiffre après la virgule il peut être '0' ex: 0.0
+						-- For add a position custom dublicate a condition and in the condition
+						-- 'IsVehicleModel(.., GetHashKey(-here-))' insert the name of your helicopter
+						-- then adjust x, y, z, yBack
+						--'z' is the heigh
+						--'y' is the front and the back
+						--'x' is the left at the right
+						--'backY' is the position y of the vehicle when he will be detach
+						-- the coordonates must be a number after the point because it is a float var ex: 1 = 1.0
+	
 						if IsVehicleModel(targetVehicle, GetHashKey('polmav')) or IsVehicleModel(targetVehicle, GetHashKey('maverick')) then
 							y = -0.5
 							z = 1.37
@@ -355,7 +379,7 @@ RCCar.Tow = function()
 							backY = -8.0				
 						end	
 						
-						-- Attache l'hélicoptère au charriot
+						-- attach helicopter to the cart
 						AttachEntityToEntity(targetVehicle, RCCar.Entity, GetObjectIndexFromEntityIndex(RCCar.Entity), x, y, z, 0.0, 0.0, 0.0, false, false, false, false, 20, true)
 						RCCar.towed = true
 					end
@@ -363,7 +387,7 @@ RCCar.Tow = function()
 			end	
 		end
 	else
-		
+		-- Detach helicopter to the cart
 		AttachEntityToEntity(targetVehicle, RCCar.Entity, GetObjectIndexFromEntityIndex(RCCar.Entity), 0.0, backY, 1.0, 0.0, 0.0, 0.0, false, false, false, false, 20, true)
 		DetachEntity(RCCar.targetVehicle, true, true)			
 		RCCar.towed = false
